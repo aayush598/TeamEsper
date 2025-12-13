@@ -2,17 +2,29 @@ import { NextRequest, NextResponse } from "next/server";
 import { deleteTopic } from "@/lib/db";
 import { auth } from "@clerk/nextjs/server";
 
-type Params = {
-  params: { id: string };
+type RouteContext = {
+  params: Promise<{ id: string }>;
 };
 
 export async function DELETE(
   _req: NextRequest,
-  { params }: Params
-): Promise<NextResponse> {
+  context: RouteContext
+): Promise<Response> {
   try {
     await auth.protect();
-    await deleteTopic(params.id);
+
+    const { id } = await context.params;
+    const topicId = Number(id);
+
+    if (Number.isNaN(topicId)) {
+      return NextResponse.json(
+        { error: "Invalid topic id" },
+        { status: 400 }
+      );
+    }
+
+    await deleteTopic(topicId);
+
     return NextResponse.json({ success: true });
   } catch (error) {
     const message =

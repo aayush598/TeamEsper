@@ -4,7 +4,7 @@ import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@clerk/nextjs";
 
-export default function Home(): JSX.Element {
+export default function Home(){
   const router = useRouter();
   const { isSignedIn, isLoaded } = useAuth();
 

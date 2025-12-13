@@ -155,7 +155,7 @@ export default function QuestionGenerator() {
     }
   }
 
-  const handleDeleteTopic = async (id) => {
+  const handleDeleteTopic = async (id: number): Promise<void> => {
     try {
       const response = await fetch(`/api/topics/${id}`, { method: 'DELETE' })
       if (response.ok) {
@@ -195,7 +195,7 @@ export default function QuestionGenerator() {
     }
   }
 
-  const handlePromptSelect = async (value) => {
+  const handlePromptSelect = async (value: string): Promise<void> => {
     setSelectedPromptId(value)
     if (value === 'default') {
       setActivePrompt(DEFAULT_PROMPT)
@@ -212,7 +212,7 @@ export default function QuestionGenerator() {
     }
   }
 
-  const handleToggleTopic = (topicName) => {
+  const handleToggleTopic = (topicName: string): void => {
     setSelectedTopics(prev => 
       prev.includes(topicName) 
         ? prev.filter(t => t !== topicName)
@@ -439,7 +439,9 @@ export default function QuestionGenerator() {
                     <Checkbox
                       id="use-all-topics"
                       checked={useAllTopics}
-                      onCheckedChange={setUseAllTopics}
+                      onCheckedChange={(checked) => {
+                        setUseAllTopics(checked === true);
+                      }}
                     />
                     <Label htmlFor="use-all-topics">Use all topics</Label>
                   </div>
@@ -559,7 +561,7 @@ export default function QuestionGenerator() {
                     <Brain className="h-16 w-16 text-gray-300 mb-4" />
                     <p className="text-gray-500 mb-2">No questions generated yet</p>
                     <p className="text-sm text-gray-400">
-                      Configure your quiz settings and click "Generate Questions"
+                      Configure your quiz settings and click Generate Questions
                     </p>
                   </div>
                 )}

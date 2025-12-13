@@ -14,9 +14,20 @@ import { Button } from "@/components/ui/button";
 import { Brain, Lock, Sparkles } from "lucide-react";
 
 export default function Dashboard(){
+  
   const router = useRouter();
   const { user, isLoaded } = useUser();
   const [isInitializing, setIsInitializing] = useState<boolean>(true);
+
+  type Tool = {
+    id: string;
+    title: string;
+    description: string;
+    icon: React.ElementType;
+    available: boolean;
+    route?: string;
+  };
+
 
   useEffect(() => {
     const initDatabase = async (): Promise<void> => {
@@ -40,7 +51,7 @@ export default function Dashboard(){
     );
   }
 
-  const tools = [
+  const tools: Tool[] = [
     {
       id: "question-generator",
       title: "Question Generator",
@@ -56,7 +67,6 @@ export default function Dashboard(){
       description: "AI-powered code review",
       icon: Sparkles,
       available: false,
-      route: null,
     },
     {
       id: "mock-interviewer",
@@ -64,12 +74,12 @@ export default function Dashboard(){
       description: "Practice interviews with AI",
       icon: Lock,
       available: false,
-      route: null,
     },
   ];
 
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50">
+    <div className="min-h-screen bg-linear-to-br from-blue-50 via-indigo-50 to-purple-50">
       {/* Header */}
       <header className="border-b bg-white/80 backdrop-blur-sm">
         <div className="container mx-auto px-4 py-4 flex items-center justify-between">
@@ -104,11 +114,15 @@ export default function Dashboard(){
                 className={`relative overflow-hidden transition-all hover:shadow-lg ${
                   tool.available ? 'cursor-pointer' : 'opacity-60'
                 }`}
-                onClick={() => tool.available && router.push(tool.route)}
+                onClick={() => {
+                  if (tool.available && tool.route) {
+                    router.push(tool.route);
+                  }
+                }}
               >
                 <CardHeader>
                   <div className="flex items-start justify-between">
-                    <div className="p-3 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-lg">
+                    <div className="p-3 bg-linear-to-br from-blue-500 to-indigo-600 rounded-lg">
                       <Icon className="h-6 w-6 text-white" />
                     </div>
                     {!tool.available && (

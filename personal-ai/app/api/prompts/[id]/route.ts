@@ -2,17 +2,18 @@ import { NextRequest, NextResponse } from "next/server";
 import { getPromptById, deletePrompt } from "@/lib/db";
 import { auth } from "@clerk/nextjs/server";
 
-type Params = {
-  params: { id: string };
+type RouteContext = {
+  params: Promise<{ id: string }>;
 };
 
 export async function GET(
   _req: NextRequest,
-  { params }: Params
-): Promise<NextResponse> {
+  context: RouteContext
+): Promise<Response> {
   try {
     await auth.protect();
-    const prompt = await getPromptById(params.id);
+    const { id } = await context.params;
+    const prompt = await getPromptById(id);
     return NextResponse.json({ prompt });
   } catch (error) {
     const message =
@@ -27,11 +28,12 @@ export async function GET(
 
 export async function DELETE(
   _req: NextRequest,
-  { params }: Params
-): Promise<NextResponse> {
+  context: RouteContext
+): Promise<Response> {
   try {
     await auth.protect();
-    await deletePrompt(params.id);
+    const { id } = await context.params;
+    await deletePrompt(id);
     return NextResponse.json({ success: true });
   } catch (error) {
     const message =
