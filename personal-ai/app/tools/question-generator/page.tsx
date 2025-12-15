@@ -29,7 +29,14 @@ interface Prompt {
   prompt: string;
 }
 
-
+interface HistoryItem {
+  id: number;
+  topics: string[];
+  quizMode: string;
+  questionType: string;
+  numQuestions: number;
+  createdAt: string;
+}
 
 const DEFAULT_PROMPT = `You are a senior technical interviewer at a top product-based company.
 
@@ -101,11 +108,15 @@ export default function QuestionGenerator() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
+  const [history, setHistory] = useState<HistoryItem[]>([]);
+
+
   useEffect(() => {
     if (!isLoaded) return;        // wait for Clerk
     if (!isSignedIn) return;      // user not signed in
 
     loadData();
+    loadHistory();
   }, [isLoaded, isSignedIn]);
 
 
@@ -133,6 +144,34 @@ export default function QuestionGenerator() {
       setIsLoading(false)
     }
   }
+
+  const loadHistory = async () => {
+    const res = await fetch("/api/question-history");
+    if (!res.ok) return;
+
+    const data = await res.json();
+    setHistory(data.history || []);
+  };
+
+  const handleDeleteHistory = async (
+    id: number,
+    e: React.MouseEvent
+  ) => {
+    e.stopPropagation(); // 🔥 prevents loading the card
+
+    const res = await fetch(`/api/question-history/${id}`, {
+      method: "DELETE",
+    });
+
+    if (res.ok) {
+      setHistory((prev) => prev.filter((h) => h.id !== id));
+      sonnerToast.success("History deleted");
+    } else {
+      sonnerToast.error("Failed to delete history");
+    }
+  };
+
+
 
   const handleAddTopic = async () => {
     if (!newTopic.trim()) {
@@ -243,11 +282,21 @@ export default function QuestionGenerator() {
         .replace('{question_type}', questionType)
         .replace('{num_questions}', numQuestions.toString())
 
-      const response = await fetch('/api/generate-questions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt: finalPrompt })
-      })
+      const response = await fetch("/api/generate-questions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          finalPrompt,
+          topics: topicsToUse,
+          promptTemplate:
+            selectedPromptId === "default"
+              ? "Default Prompt"
+              : prompts.find(p => p.id.toString() === selectedPromptId)?.title ?? "Custom",
+          quizMode,
+          questionType,
+          numQuestions,
+        }),
+      });
 
       if (response.ok) {
         const data = await response.json()
@@ -542,7 +591,7 @@ export default function QuestionGenerator() {
             </Card>
           </div>
 
-          {/* Right Panel - Generated Questions */}
+          {/* Right Panel - Generated Questions + History */}
           <div className="lg:col-span-1">
             <Card className="h-full">
               <CardHeader>
@@ -554,25 +603,78 @@ export default function QuestionGenerator() {
                   Your AI-generated interview questions will appear here
                 </CardDescription>
               </CardHeader>
-              <CardContent>
+
+              <CardContent className="space-y-6">
+                {/* Current Output */}
                 {generatedQuestions ? (
-                  <ScrollArea className="h-[600px]">
+                  <ScrollArea className="h-[300px]">
                     <div className="whitespace-pre-wrap text-sm font-mono bg-gray-50 p-4 rounded-lg">
                       {generatedQuestions}
                     </div>
                   </ScrollArea>
                 ) : (
-                  <div className="flex flex-col items-center justify-center h-[400px] text-center">
-                    <Brain className="h-16 w-16 text-gray-300 mb-4" />
-                    <p className="text-gray-500 mb-2">No questions generated yet</p>
-                    <p className="text-sm text-gray-400">
-                      Configure your quiz settings and click Generate Questions
-                    </p>
+                  <div className="flex flex-col items-center justify-center h-[200px] text-center">
+                    <Brain className="h-12 w-12 text-gray-300 mb-4" />
+                    <p className="text-gray-500">No questions generated yet</p>
                   </div>
                 )}
+
+                {/* Divider */}
+                <div className="border-t" />
+
+                {/* History */}
+                <div>
+                  <h3 className="text-sm font-semibold mb-2">History</h3>
+
+                  <ScrollArea className="h-[250px] space-y-2">
+                    {history.length === 0 ? (
+                      <p className="text-xs text-gray-500">
+                        No previous generations
+                      </p>
+                    ) : (
+                      history.map((item) => (
+                        <Card
+                          key={item.id}
+                          className="cursor-pointer hover:bg-gray-50 relative"
+                          onClick={async () => {
+                            const res = await fetch(`/api/question-history/${item.id}`);
+                            if (!res.ok) return;
+
+                            const data = await res.json();
+                            setGeneratedQuestions(data.record.output);
+                          }}
+                        >
+                          <CardContent className="p-3 text-sm space-y-1">
+                            <div className="flex items-start justify-between gap-2">
+                              <p className="font-medium truncate">
+                                {item.topics.join(", ")}
+                              </p>
+
+                              <button
+                                onClick={(e) => handleDeleteHistory(item.id, e)}
+                                className="text-xs text-red-500 hover:text-red-700"
+                              >
+                                Delete
+                              </button>
+                            </div>
+
+                            <p className="text-xs text-gray-500">
+                              {item.quizMode} · {item.questionType} · {item.numQuestions} Q
+                            </p>
+
+                            <p className="text-[10px] text-gray-400">
+                              {new Date(item.createdAt).toLocaleString()}
+                            </p>
+                          </CardContent>
+                        </Card>
+                      ))
+                    )}
+                  </ScrollArea>
+                </div>
               </CardContent>
             </Card>
           </div>
+
         </div>
       </main>
     </div>

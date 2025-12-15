@@ -8,6 +8,13 @@
       "when": 1765815812635,
       "tag": "0000_perfect_wildside",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1765822304206,
+      "tag": "0001_loose_screwball",
+      "breakpoints": true
     }
   ]
 }

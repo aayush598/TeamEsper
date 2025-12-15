@@ -6,8 +6,9 @@ import {
   text,
   timestamp,
   index,
+  json,
 } from "drizzle-orm/pg-core";
-import { eq } from "drizzle-orm";
+import { eq, desc, and } from "drizzle-orm";
 
 /* ------------------------------------------------------------------ */
 /* DB CONNECTION */
@@ -177,6 +178,107 @@ export async function deletePrompt(userId: string, id: number) {
     .delete(prompts)
     .where(
       eq(prompts.userId, userId)
+    );
+
+  return { success: true };
+}
+
+
+/* ------------------------------------------------------------------ */
+/* QUESTION GENERATION HISTORY */
+/* ------------------------------------------------------------------ */
+
+export const questionGenerations = pgTable(
+  "question_generations",
+  {
+    id: serial("id").primaryKey(),
+    userId: text("user_id").notNull(),
+
+    // Inputs
+    topics: json("topics").$type<string[]>().notNull(),
+    promptTemplate: text("prompt_template").notNull(),
+    quizMode: text("quiz_mode").notNull(),
+    questionType: text("question_type").notNull(),
+    numQuestions: serial("num_questions").notNull(),
+
+    finalPrompt: text("final_prompt").notNull(),
+
+    // Output
+    output: text("output").notNull(),
+
+    createdAt: timestamp("created_at").defaultNow(),
+  },
+  (t) => ({
+    userIdx: index("question_gen_user_idx").on(t.userId),
+  })
+);
+
+/* ------------------------------------------------------------------ */
+/* QUESTION HISTORY */
+/* ------------------------------------------------------------------ */
+
+export async function insertQuestionGeneration(data: {
+  userId: string;
+  topics: string[];
+  promptTemplate: string;
+  quizMode: string;
+  questionType: string;
+  numQuestions: number;
+  finalPrompt: string;
+  output: string;
+}) {
+  const result = await db
+    .insert(questionGenerations)
+    .values(data)
+    .returning();
+
+  return result[0];
+}
+
+
+export async function getQuestionGenerations(userId: string) {
+  return db
+    .select({
+      id: questionGenerations.id,
+      topics: questionGenerations.topics,
+      quizMode: questionGenerations.quizMode,
+      questionType: questionGenerations.questionType,
+      numQuestions: questionGenerations.numQuestions,
+      createdAt: questionGenerations.createdAt,
+    })
+    .from(questionGenerations)
+    .where(eq(questionGenerations.userId, userId))
+    .orderBy(desc(questionGenerations.createdAt)); // ✅ latest first
+}
+
+export async function getQuestionGenerationById(
+  userId: string,
+  id: number
+) {
+  const result = await db
+    .select()
+    .from(questionGenerations)
+    .where(
+      and(
+        eq(questionGenerations.userId, userId),
+        eq(questionGenerations.id, id) // ✅ FIX
+      )
+    );
+
+  return result[0] ?? null;
+}
+
+export async function deleteQuestionGeneration(
+  userId: string,
+  id: number
+) {
+  await db
+    .delete(questionGenerations)
+    .where(
+      and(
+        eq(questionGenerations.userId, userId),
+        eq(questionGenerations.id, id)
+      )
     );
 
   return { success: true };
