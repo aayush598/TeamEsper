@@ -11,10 +11,16 @@ export async function DELETE(
   context: RouteContext
 ): Promise<Response> {
   try {
-    await auth.protect();
-
     const { id } = await context.params;
     const topicId = Number(id);
+    const { userId } = await auth();
+
+    if (!userId) {
+      return NextResponse.json(
+        { error: "Unauthorized" },
+        { status: 401 }
+      );
+    }
 
     if (Number.isNaN(topicId)) {
       return NextResponse.json(
@@ -23,7 +29,7 @@ export async function DELETE(
       );
     }
 
-    await deleteTopic(topicId);
+    await deleteTopic(userId, topicId);
 
     return NextResponse.json({ success: true });
   } catch (error) {

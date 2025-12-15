@@ -80,7 +80,7 @@ Rules for question type:
 
 export default function QuestionGenerator() {
   const router = useRouter()
-  const { user } = useUser()
+  const { user, isLoaded, isSignedIn } = useUser();
   const [topics, setTopics] = useState<Topic[]>([]);
   const [prompts, setPrompts] = useState<Prompt[]>([]);
   const [newTopic, setNewTopic] = useState("");
@@ -102,16 +102,21 @@ export default function QuestionGenerator() {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    loadData()
-  }, [])
+    if (!isLoaded) return;        // wait for Clerk
+    if (!isSignedIn) return;      // user not signed in
+
+    loadData();
+  }, [isLoaded, isSignedIn]);
+
 
   const loadData = async () => {
     try {
+      
       const [topicsRes, promptsRes] = await Promise.all([
         fetch('/api/topics'),
         fetch('/api/prompts')
       ])
-      
+      console.log('Testing 124')
       if (topicsRes.ok) {
         const data = await topicsRes.json()
         setTopics(data.topics || [])
@@ -260,7 +265,7 @@ export default function QuestionGenerator() {
     }
   }
 
-  if (isLoading) {
+  if (!isLoaded || isLoading) {
     return (
       <div className="flex min-h-screen items-center justify-center">
         <div className="text-center">
@@ -268,7 +273,7 @@ export default function QuestionGenerator() {
           <p className="mt-4 text-gray-600">Loading...</p>
         </div>
       </div>
-    )
+    );
   }
 
   return (

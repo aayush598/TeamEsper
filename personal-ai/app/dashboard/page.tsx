@@ -1,6 +1,5 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { UserButton, useUser } from "@clerk/nextjs";
 import {
@@ -13,37 +12,11 @@ import {
 import { Button } from "@/components/ui/button";
 import { Brain, Lock, Sparkles } from "lucide-react";
 
-export default function Dashboard(){
-  
+export default function Dashboard() {
   const router = useRouter();
   const { user, isLoaded } = useUser();
-  const [isInitializing, setIsInitializing] = useState<boolean>(true);
 
-  type Tool = {
-    id: string;
-    title: string;
-    description: string;
-    icon: React.ElementType;
-    available: boolean;
-    route?: string;
-  };
-
-
-  useEffect(() => {
-    const initDatabase = async (): Promise<void> => {
-      try {
-        await fetch("/api/init-db");
-      } catch (error) {
-        console.error("Database initialization error:", error);
-      } finally {
-        setIsInitializing(false);
-      }
-    };
-
-    initDatabase();
-  }, []);
-
-  if (!isLoaded || isInitializing) {
+  if (!isLoaded) {
     return (
       <div className="flex min-h-screen items-center justify-center">
         <p>Loading dashboard...</p>
@@ -51,7 +24,7 @@ export default function Dashboard(){
     );
   }
 
-  const tools: Tool[] = [
+  const tools = [
     {
       id: "question-generator",
       title: "Question Generator",
@@ -77,7 +50,6 @@ export default function Dashboard(){
     },
   ];
 
-
   return (
     <div className="min-h-screen bg-linear-to-br from-blue-50 via-indigo-50 to-purple-50">
       {/* Header */}
@@ -85,12 +57,18 @@ export default function Dashboard(){
         <div className="container mx-auto px-4 py-4 flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-bold text-gray-900">Interview Hub</h1>
-            <p className="text-sm text-gray-600">AI-Powered Interview Preparation</p>
+            <p className="text-sm text-gray-600">
+              AI-Powered Interview Preparation
+            </p>
           </div>
           <div className="flex items-center gap-4">
             <div className="text-right">
-              <p className="text-sm font-medium text-gray-900">{user?.firstName || 'User'}</p>
-              <p className="text-xs text-gray-600">{user?.primaryEmailAddress?.emailAddress}</p>
+              <p className="text-sm font-medium text-gray-900">
+                {user?.firstName || "User"}
+              </p>
+              <p className="text-xs text-gray-600">
+                {user?.primaryEmailAddress?.emailAddress}
+              </p>
             </div>
             <UserButton afterSignOutUrl="/sign-in" />
           </div>
@@ -100,19 +78,23 @@ export default function Dashboard(){
       {/* Main Content */}
       <main className="container mx-auto px-4 py-8">
         <div className="mb-8">
-          <h2 className="text-3xl font-bold text-gray-900 mb-2">Welcome back, {user?.firstName}! 👋</h2>
-          <p className="text-gray-600">Select a tool to get started with your interview preparation</p>
+          <h2 className="text-3xl font-bold text-gray-900 mb-2">
+            Welcome back, {user?.firstName}! 👋
+          </h2>
+          <p className="text-gray-600">
+            Select a tool to get started with your interview preparation
+          </p>
         </div>
 
         {/* Tools Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {tools.map((tool) => {
-            const Icon = tool.icon
+            const Icon = tool.icon;
             return (
-              <Card 
-                key={tool.id} 
+              <Card
+                key={tool.id}
                 className={`relative overflow-hidden transition-all hover:shadow-lg ${
-                  tool.available ? 'cursor-pointer' : 'opacity-60'
+                  tool.available ? "cursor-pointer" : "opacity-60"
                 }`}
                 onClick={() => {
                   if (tool.available && tool.route) {
@@ -136,9 +118,7 @@ export default function Dashboard(){
                 </CardHeader>
                 <CardContent>
                   {tool.available ? (
-                    <Button className="w-full" variant="default">
-                      Launch Tool
-                    </Button>
+                    <Button className="w-full">Launch Tool</Button>
                   ) : (
                     <Button className="w-full" variant="secondary" disabled>
                       Coming Soon
@@ -146,10 +126,10 @@ export default function Dashboard(){
                   )}
                 </CardContent>
               </Card>
-            )
+            );
           })}
         </div>
       </main>
     </div>
-  )
+  );
 }

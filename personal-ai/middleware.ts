@@ -5,7 +5,6 @@ const isPublicRoute = createRouteMatcher([
   "/",
   "/sign-in(.*)",
   "/sign-up(.*)",
-  "/api/init-db", // Database initialization should be public
 ]);
 
 export default clerkMiddleware(async (auth, req) => {
