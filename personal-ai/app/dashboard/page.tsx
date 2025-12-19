@@ -42,11 +42,11 @@ export default function Dashboard() {
       available: true,
     },
     {
-      id: "mock-interviewer",
-      title: "Mock Interviewer",
-      description: "Practice interviews with AI",
+      id: "news",
+      title: "News Hub",
+      description: "Browse latest tech and general news from top sources",
       icon: Lock,
-      available: false,
+      available: true,
     },
   ];
 

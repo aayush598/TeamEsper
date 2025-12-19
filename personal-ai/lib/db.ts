@@ -7,6 +7,7 @@ import {
   timestamp,
   index,
   json,
+  boolean,
 } from "drizzle-orm/pg-core";
 import { eq, desc, and, gte } from "drizzle-orm";
 
@@ -98,9 +99,241 @@ Your task is to generate ONLY QUESTIONS (no answers, no hints, no explanations).
 
 
 /* ------------------------------------------------------------------ */
-/* TOPICS */
+/* NEW: NEWS ARTICLES SCHEMA */
 /* ------------------------------------------------------------------ */
 
+
+export const newsArticles = pgTable(
+  "news_articles",
+  {
+    id: serial("id").primaryKey(),
+    
+    // Article Info
+    title: text("title").notNull(),
+    description: text("description"),
+    content: text("content"),
+    url: text("url").notNull().unique(),
+    imageUrl: text("image_url"),
+    
+    // Metadata
+    category: text("category").notNull(), // 'tech' or 'general'
+    source: text("source").notNull(), // 'techcrunch' or 'wired'
+    author: text("author"),
+    publishedAt: timestamp("published_at"),
+    
+    // Scraping metadata
+    scrapedAt: timestamp("scraped_at").defaultNow().notNull(),
+    lastUpdated: timestamp("last_updated").defaultNow().notNull(),
+  },
+  (t) => ({
+    categoryIdx: index("news_category_idx").on(t.category),
+    sourceIdx: index("news_source_idx").on(t.source),
+    scrapedAtIdx: index("news_scraped_at_idx").on(t.scrapedAt),
+    urlIdx: index("news_url_idx").on(t.url),
+  })
+);
+
+export const userNewsReadStatus = pgTable(
+  "user_news_read_status",
+  {
+    id: serial("id").primaryKey(),
+    userId: text("user_id").notNull(),
+    articleId: serial("article_id").notNull().references(() => newsArticles.id, { onDelete: "cascade" }),
+    isRead: boolean("is_read").default(false).notNull(),
+    readAt: timestamp("read_at"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (t) => ({
+    userArticleIdx: index("user_article_idx").on(t.userId, t.articleId),
+    userIdx: index("user_news_idx").on(t.userId),
+  })
+);
+
+/* ------------------------------------------------------------------ */
+/* NEWS ARTICLE FUNCTIONS */
+/* ------------------------------------------------------------------ */
+
+export interface NewsArticle {
+  id: number;
+  title: string;
+  description: string | null;
+  content: string | null;
+  url: string;
+  imageUrl: string | null;
+  category: string;
+  source: string;
+  author: string | null;
+  publishedAt: Date | null;
+  scrapedAt: Date;
+  lastUpdated: Date;
+  isRead?: boolean;
+}
+
+export async function insertNewsArticles(articles: Array<{
+  title: string;
+  description?: string;
+  content?: string;
+  url: string;
+  imageUrl?: string;
+  category: string;
+  source: string;
+  author?: string;
+  publishedAt?: Date;
+}>) {
+  const results = [];
+  
+  for (const article of articles) {
+    const existing = await db
+      .select()
+      .from(newsArticles)
+      .where(eq(newsArticles.url, article.url))
+      .limit(1);
+    
+    if (existing.length === 0) {
+      const result = await db
+        .insert(newsArticles)
+        .values(article)
+        .returning();
+      
+      results.push(result[0]);
+    } else {
+      results.push(existing[0]);
+    }
+  }
+  
+  return results;
+}
+
+export async function getNewsArticles(filters?: {
+  category?: string;
+  source?: string;
+  startDate?: Date;
+  endDate?: Date;
+  limit?: number;
+}) {
+  let query = db.select().from(newsArticles);
+  
+  const conditions = [];
+  
+  if (filters?.category) {
+    conditions.push(eq(newsArticles.category, filters.category));
+  }
+  
+  if (filters?.source) {
+    conditions.push(eq(newsArticles.source, filters.source));
+  }
+  
+  if (filters?.startDate) {
+    conditions.push(gte(newsArticles.scrapedAt, filters.startDate));
+  }
+  
+  if (conditions.length > 0) {
+    query = query.where(and(...conditions)) as any;
+  }
+  
+  return query
+    .orderBy(desc(newsArticles.scrapedAt))
+    .limit(filters?.limit || 100);
+}
+
+export async function getNewsWithReadStatus(userId: string, filters?: {
+  category?: string;
+  source?: string;
+  startDate?: Date;
+  isRead?: boolean;
+  limit?: number;
+}) {
+  const conditions = [];
+  
+  if (filters?.category) {
+    conditions.push(eq(newsArticles.category, filters.category));
+  }
+  
+  if (filters?.source) {
+    conditions.push(eq(newsArticles.source, filters.source));
+  }
+  
+  if (filters?.startDate) {
+    conditions.push(gte(newsArticles.scrapedAt, filters.startDate));
+  }
+  
+  const articles = await db
+    .select({
+      id: newsArticles.id,
+      title: newsArticles.title,
+      description: newsArticles.description,
+      content: newsArticles.content,
+      url: newsArticles.url,
+      imageUrl: newsArticles.imageUrl,
+      category: newsArticles.category,
+      source: newsArticles.source,
+      author: newsArticles.author,
+      publishedAt: newsArticles.publishedAt,
+      scrapedAt: newsArticles.scrapedAt,
+      lastUpdated: newsArticles.lastUpdated,
+      isRead: userNewsReadStatus.isRead,
+    })
+    .from(newsArticles)
+    .leftJoin(
+      userNewsReadStatus,
+      and(
+        eq(userNewsReadStatus.articleId, newsArticles.id),
+        eq(userNewsReadStatus.userId, userId)
+      )
+    )
+    .where(conditions.length > 0 ? and(...conditions) : undefined)
+    .orderBy(desc(newsArticles.scrapedAt))
+    .limit(filters?.limit || 100);
+  
+  // Filter by read status if specified
+  if (filters?.isRead !== undefined) {
+    return articles.filter(a => (a.isRead || false) === filters.isRead);
+  }
+  
+  return articles;
+}
+
+export async function markArticleAsRead(userId: string, articleId: number) {
+  const existing = await db
+    .select()
+    .from(userNewsReadStatus)
+    .where(
+      and(
+        eq(userNewsReadStatus.userId, userId),
+        eq(userNewsReadStatus.articleId, articleId)
+      )
+    )
+    .limit(1);
+  
+  if (existing.length > 0) {
+    return db
+      .update(userNewsReadStatus)
+      .set({ isRead: true, readAt: new Date() })
+      .where(eq(userNewsReadStatus.id, existing[0].id))
+      .returning();
+  } else {
+    return db
+      .insert(userNewsReadStatus)
+      .values({
+        userId,
+        articleId,
+        isRead: true,
+        readAt: new Date(),
+      })
+      .returning();
+  }
+}
+
+export async function deleteOldNews(daysOld: number = 30) {
+  const cutoffDate = new Date();
+  cutoffDate.setDate(cutoffDate.getDate() - daysOld);
+  
+  await db
+    .delete(newsArticles)
+    .where(gte(newsArticles.scrapedAt, cutoffDate));
+}
+
+// Keep all your existing functions below
 export async function insertTopic(userId: string, name: string) {
   const result = await db
     .insert(topics)
