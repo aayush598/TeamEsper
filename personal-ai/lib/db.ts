@@ -8,7 +8,7 @@ import {
   index,
   json,
 } from "drizzle-orm/pg-core";
-import { eq, desc, and } from "drizzle-orm";
+import { eq, desc, and, gte } from "drizzle-orm";
 
 /* ------------------------------------------------------------------ */
 /* DB CONNECTION */
@@ -31,7 +31,7 @@ export const topics = pgTable(
     id: serial("id").primaryKey(),
     userId: text("user_id").notNull(),   // 👈 NEW
     name: text("name").notNull(),
-    createdAt: timestamp("created_at").defaultNow(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
   },
   (table) => ({
     userIdx: index("topics_user_idx").on(table.userId),
@@ -45,7 +45,7 @@ export const prompts = pgTable(
     userId: text("user_id").notNull(),   // 👈 NEW
     title: text("title").notNull(),
     prompt: text("prompt").notNull(),
-    createdAt: timestamp("created_at").defaultNow(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
   },
   (table) => ({
     userIdx: index("prompts_user_idx").on(table.userId),
@@ -206,7 +206,7 @@ export const questionGenerations = pgTable(
     // Output
     output: text("output").notNull(),
 
-    createdAt: timestamp("created_at").defaultNow(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
   },
   (t) => ({
     userIdx: index("question_gen_user_idx").on(t.userId),
@@ -282,4 +282,109 @@ export async function deleteQuestionGeneration(
     );
 
   return { success: true };
+}
+
+
+
+interface DailyQuestionInput {
+  userId: string;
+  question: string;
+  answer: string;
+  category: string;
+  promptUsed: string;
+}
+
+interface DailyQuestionRecord {
+  id: number;
+  userId: string;
+  question: string;
+  answer: string;
+  category: string;
+  promptUsed: string;
+  createdAt: Date;
+  userNotes?: string | null;
+}
+
+/* ------------------------------------------------------------------ */
+/* DAILY QUESTIONS */
+/* ------------------------------------------------------------------ */
+
+export const dailyQuestions = pgTable(
+  "daily_questions",
+  {
+    id: serial("id").primaryKey(),
+    userId: text("user_id").notNull(),
+
+    question: text("question").notNull(),
+    answer: text("answer").notNull(),
+    category: text("category").notNull(),
+    promptUsed: text("prompt_used").notNull(),
+
+    userNotes: text("user_notes"),
+
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (t) => ({
+    userIdx: index("daily_questions_user_idx").on(t.userId),
+    createdAtIdx: index("daily_questions_created_at_idx").on(t.createdAt),
+  })
+);
+
+export async function getTodayQuestion(
+  userId: string
+): Promise<DailyQuestionRecord | null> {
+  const startOfDay = new Date();
+  startOfDay.setHours(0, 0, 0, 0);
+
+  const result = await db
+    .select()
+    .from(dailyQuestions)
+    .where(
+      and(
+        eq(dailyQuestions.userId, userId),
+        gte(dailyQuestions.createdAt, startOfDay)
+      )
+    )
+    .orderBy(desc(dailyQuestions.createdAt))
+    .limit(1);
+
+  return result[0] ?? null;
+}
+
+export async function insertDailyQuestion(
+  data: DailyQuestionInput
+): Promise<DailyQuestionRecord> {
+  const result = await db
+    .insert(dailyQuestions)
+    .values(data)
+    .returning();
+
+  return result[0];
+}
+
+export async function getDailyQuestionHistory(
+  userId: string
+): Promise<DailyQuestionRecord[]> {
+  return db
+    .select()
+    .from(dailyQuestions)
+    .where(eq(dailyQuestions.userId, userId))
+    .orderBy(desc(dailyQuestions.createdAt))
+    .limit(30);
+}
+
+export async function updateQuestionNotes(
+  userId: string,
+  questionId: number,
+  notes: string
+): Promise<void> {
+  await db
+    .update(dailyQuestions)
+    .set({ userNotes: notes })
+    .where(
+      and(
+        eq(dailyQuestions.id, questionId),
+        eq(dailyQuestions.userId, userId)
+      )
+    );
 }

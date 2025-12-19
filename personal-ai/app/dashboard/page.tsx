@@ -35,11 +35,11 @@ export default function Dashboard() {
       route: "/tools/question-generator",
     },
     {
-      id: "code-reviewer",
-      title: "Code Reviewer",
-      description: "AI-powered code review",
+      id: "daily-decision-coach",
+      title: "Daily Decision Coach",
+      description: "Generate one thoughtful question per day about future decisions",
       icon: Sparkles,
-      available: false,
+      available: true,
     },
     {
       id: "mock-interviewer",
