@@ -36,10 +36,7 @@ export async function scrapeAllNews(): Promise<ScrapedArticle[]> {
 export { 
   scrapeTechCrunch, 
   scrapeWired,
-  scrapeTheVerge,
-  scrapeArsTechnica,
   scrapeCNET,
-  scrapeEngadget
 };
 
 export type { ScrapedArticle };

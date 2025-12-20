@@ -1,4 +1,5 @@
 import * as cheerio from 'cheerio';
+import { ScrapedArticle } from './types';
 
 export async function scrapeTechCrunch(): Promise<ScrapedArticle[]> {
   try {

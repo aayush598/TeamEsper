@@ -40,6 +40,7 @@ export default function Dashboard() {
       description: "Generate one thoughtful question per day about future decisions",
       icon: Sparkles,
       available: true,
+      route: "/tools/daily-decision-coach",
     },
     {
       id: "news",
@@ -47,6 +48,7 @@ export default function Dashboard() {
       description: "Browse latest tech and general news from top sources",
       icon: Lock,
       available: true,
+      route: "/tools/news",
     },
   ];
 
