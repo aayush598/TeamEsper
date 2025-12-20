@@ -10,7 +10,8 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Brain, Lock, Sparkles } from "lucide-react";
+import { Brain, Sparkles, Timer} from "lucide-react";
+import { Newspaper } from "lucide-react";
 
 export default function Dashboard() {
   const router = useRouter();
@@ -46,9 +47,17 @@ export default function Dashboard() {
       id: "news",
       title: "News Hub",
       description: "Browse latest tech and general news from top sources",
-      icon: Lock,
+      icon: Newspaper,
       available: true,
       route: "/tools/news",
+    },
+    {
+      id: "time-management",
+      title: "Time management",
+      description: "Time Management tool for effective time saving and task management",
+      icon: Timer,
+      available: true,
+      route: "/tools/time-management",
     },
   ];
 
