@@ -8,8 +8,9 @@ import {
   index,
   json,
   boolean,
+  integer,
 } from "drizzle-orm/pg-core";
-import { eq, desc, and, gte } from "drizzle-orm";
+import { eq, desc, and, gte, sql } from "drizzle-orm";
 
 /* ------------------------------------------------------------------ */
 /* DB CONNECTION */
@@ -620,4 +621,186 @@ export async function updateQuestionNotes(
         eq(dailyQuestions.userId, userId)
       )
     );
+}
+
+
+/* ------------------------------------------------------------------ */
+/* TASKS (TIME MANAGEMENT) */
+/* ------------------------------------------------------------------ */
+
+// 👇 NEW: Tasks Table for Time Management
+export const tasks = pgTable(
+  "tasks",
+  {
+    id: serial("id").primaryKey(),
+    userId: text("user_id").notNull(),
+    title: text("title").notNull(),
+    description: text("description").default(""),
+    duration: integer("duration").notNull(), // in minutes
+    status: text("status").notNull().default("pending"), // pending, started, finished, quit
+    date: text("date").notNull(), // YYYY-MM-DD format
+    createdAt: timestamp("created_at").defaultNow(),
+    updatedAt: timestamp("updated_at").defaultNow(),
+  },
+  (table) => ({
+    userIdx: index("tasks_user_idx").on(table.userId),
+    userDateIdx: index("tasks_user_date_idx").on(table.userId, table.date),
+    statusIdx: index("tasks_status_idx").on(table.status),
+  })
+);
+
+/**
+ * Get all tasks for a user on a specific date
+ */
+export async function getTasks(userId: string, date: string) {
+  return db
+    .select()
+    .from(tasks)
+    .where(and(eq(tasks.userId, userId), eq(tasks.date, date)))
+    .orderBy(tasks.createdAt);
+}
+
+/**
+ * Get a specific task by ID
+ */
+export async function getTaskById(userId: string, id: number) {
+  const result = await db
+    .select()
+    .from(tasks)
+    .where(and(eq(tasks.userId, userId), eq(tasks.id, id)));
+
+  return result[0] ?? null;
+}
+
+/**
+ * Insert a new task
+ */
+export async function insertTask(data: {
+  userId: string;
+  title: string;
+  description: string;
+  duration: number;
+  date: string;
+}) {
+  const result = await db
+    .insert(tasks)
+    .values({
+      userId: data.userId,
+      title: data.title,
+      description: data.description,
+      duration: data.duration,
+      status: "pending",
+      date: data.date,
+    })
+    .returning();
+
+  return result[0];
+}
+
+/**
+ * Update a task
+ */
+export async function updateTask(
+  userId: string,
+  id: number,
+  data: {
+    title: string;
+    description: string;
+    duration: number;
+    date: string;
+  }
+) {
+  const result = await db
+    .update(tasks)
+    .set({
+      title: data.title,
+      description: data.description,
+      duration: data.duration,
+      date: data.date,
+      updatedAt: new Date(),
+    })
+    .where(and(eq(tasks.userId, userId), eq(tasks.id, id)))
+    .returning();
+
+  return result[0] ?? null;
+}
+
+/**
+ * Update task status
+ */
+export async function updateTaskStatus(
+  userId: string,
+  id: number,
+  status: "pending" | "started" | "finished" | "quit"
+) {
+  const result = await db
+    .update(tasks)
+    .set({
+      status,
+      updatedAt: new Date(),
+    })
+    .where(and(eq(tasks.userId, userId), eq(tasks.id, id)))
+    .returning();
+
+  return result[0] ?? null;
+}
+
+/**
+ * Delete a task
+ */
+export async function deleteTask(userId: string, id: number) {
+  await db
+    .delete(tasks)
+    .where(and(eq(tasks.userId, userId), eq(tasks.id, id)));
+
+  return { success: true };
+}
+
+/**
+ * Get task statistics for a user
+ */
+export async function getTaskStats(userId: string, date: string) {
+  const result = await db
+    .select({
+      total: sql<number>`count(*)`,
+      pending: sql<number>`count(*) filter (where ${tasks.status} = 'pending')`,
+      started: sql<number>`count(*) filter (where ${tasks.status} = 'started')`,
+      finished: sql<number>`count(*) filter (where ${tasks.status} = 'finished')`,
+      quit: sql<number>`count(*) filter (where ${tasks.status} = 'quit')`,
+      totalDuration: sql<number>`sum(${tasks.duration})`,
+      finishedDuration: sql<number>`sum(${tasks.duration}) filter (where ${tasks.status} = 'finished')`,
+    })
+    .from(tasks)
+    .where(and(eq(tasks.userId, userId), eq(tasks.date, date)));
+
+  return result[0] ?? {
+    total: 0,
+    pending: 0,
+    started: 0,
+    finished: 0,
+    quit: 0,
+    totalDuration: 0,
+    finishedDuration: 0,
+  };
+}
+
+/**
+ * Get tasks for a date range
+ */
+export async function getTasksInRange(
+  userId: string,
+  startDate: string,
+  endDate: string
+) {
+  return db
+    .select()
+    .from(tasks)
+    .where(
+      and(
+        eq(tasks.userId, userId),
+        gte(tasks.date, startDate),
+        sql`${tasks.date} <= ${endDate}`
+      )
+    )
+    .orderBy(tasks.date, tasks.createdAt);
 }

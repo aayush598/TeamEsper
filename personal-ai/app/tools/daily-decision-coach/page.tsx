@@ -301,7 +301,7 @@ export default function DailyDecisionTool() {
                 <CardTitle className="flex items-center justify-between">
                   <span className="flex items-center gap-2">
                     <Calendar className="h-5 w-5" />
-                    Today's Question
+                    Today&apos;s Question
                   </span>
                   {todayQuestion && (
                     <span className="text-xs bg-purple-100 text-purple-700 px-2 py-1 rounded">
@@ -327,7 +327,7 @@ export default function DailyDecisionTool() {
                       ) : (
                         <>
                           <Sparkles className="h-4 w-4 mr-2" />
-                          Generate Today's Question
+                          Generate Today&apos;s Question
                         </>
                       )}
                     </Button>
