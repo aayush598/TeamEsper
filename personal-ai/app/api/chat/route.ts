@@ -19,8 +19,22 @@ export async function POST(req: NextRequest) {
     }
 
     const model = genAI.getGenerativeModel({
-      model: 'gemini-2.5-flash-lite',
-    })
+  model: 'gemini-2.5-flash-lite',
+  systemInstruction: `
+You are a helpful assistant.
+You MUST NOT generate:
+- Programming code
+- Code snippets
+- Code blocks
+- Markup code (HTML, JSX, Markdown code fences)
+- Configuration files
+- Terminal commands
+
+If the user asks for code, explain the concept in plain English only.
+Respond using simple text paragraphs and bullet points when helpful.
+`,
+})
+
 
     const result = await model.generateContent(prompt)
     const response = result.response.text()
