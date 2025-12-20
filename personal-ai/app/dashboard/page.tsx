@@ -10,8 +10,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Brain, Sparkles, Timer} from "lucide-react";
-import { Newspaper } from "lucide-react";
+import { Brain, Sparkles, Timer, Newspaper, Type} from "lucide-react";
 
 export default function Dashboard() {
   const router = useRouter();
@@ -58,6 +57,14 @@ export default function Dashboard() {
       icon: Timer,
       available: true,
       route: "/tools/time-management",
+    },
+    {
+      id: "typing-test",
+      title: "Typing Test",
+      description: "Test your typing speed with real code with your topics and language (learning also..)",
+      icon: Type,
+      available: true,
+      route: "/tools/typing-test",
     },
   ];
 

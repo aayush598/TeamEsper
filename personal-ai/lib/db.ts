@@ -804,3 +804,208 @@ export async function getTasksInRange(
     )
     .orderBy(tasks.date, tasks.createdAt);
 }
+
+// Add to lib/db.ts (append these tables to your existing schema)
+
+/* ------------------------------------------------------------------ */
+/* CODE TYPING TEST TABLES */
+/* ------------------------------------------------------------------ */
+
+export const codeSnippets = pgTable(
+  "code_snippets",
+  {
+    id: serial("id").primaryKey(),
+    topic: text("topic").notNull(),
+    language: text("language").notNull(),
+    title: text("title").notNull(),
+    description: text("description").notNull(),
+    code: text("code").notNull(),
+    difficulty: text("difficulty").notNull(), // 'beginner', 'intermediate', 'advanced'
+    lineCount: serial("line_count").notNull(),
+    characterCount: serial("character_count").notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (t) => ({
+    topicIdx: index("code_snippets_topic_idx").on(t.topic),
+    languageIdx: index("code_snippets_language_idx").on(t.language),
+    difficultyIdx: index("code_snippets_difficulty_idx").on(t.difficulty),
+  })
+);
+
+export const typingTestResults = pgTable(
+  "typing_test_results",
+  {
+    id: serial("id").primaryKey(),
+    userId: text("user_id").notNull(),
+    snippetId: serial("snippet_id").notNull().references(() => codeSnippets.id, { onDelete: "cascade" }),
+    
+    // Test metrics
+    wpm: serial("wpm").notNull(), // words per minute
+    accuracy: serial("accuracy").notNull(), // percentage
+    timeTaken: serial("time_taken").notNull(), // seconds
+    totalCharacters: serial("total_characters").notNull(),
+    correctCharacters: serial("correct_characters").notNull(),
+    incorrectCharacters: serial("incorrect_characters").notNull(),
+    
+    // Additional stats
+    topic: text("topic").notNull(),
+    language: text("language").notNull(),
+    difficulty: text("difficulty").notNull(),
+    
+    completedAt: timestamp("completed_at").defaultNow().notNull(),
+  },
+  (t) => ({
+    userIdx: index("typing_results_user_idx").on(t.userId),
+    completedAtIdx: index("typing_results_completed_at_idx").on(t.completedAt),
+  })
+);
+
+/* ------------------------------------------------------------------ */
+/* CODE SNIPPET FUNCTIONS */
+/* ------------------------------------------------------------------ */
+
+export async function insertCodeSnippet(data: {
+  topic: string;
+  language: string;
+  title: string;
+  description: string;
+  code: string;
+  difficulty: string;
+}) {
+  const lineCount = data.code.split('\n').length;
+  const characterCount = data.code.length;
+  
+  const result = await db
+    .insert(codeSnippets)
+    .values({
+      ...data,
+      lineCount,
+      characterCount,
+    })
+    .returning();
+  
+  return result[0];
+}
+
+export async function getCodeSnippets(filters?: {
+  topic?: string;
+  language?: string;
+  difficulty?: string;
+  limit?: number;
+}) {
+  const conditions = [];
+  
+  if (filters?.topic) {
+    conditions.push(eq(codeSnippets.topic, filters.topic));
+  }
+  
+  if (filters?.language) {
+    conditions.push(eq(codeSnippets.language, filters.language));
+  }
+  
+  if (filters?.difficulty) {
+    conditions.push(eq(codeSnippets.difficulty, filters.difficulty));
+  }
+  
+  let query = db.select().from(codeSnippets);
+  
+  if (conditions.length > 0) {
+    query = query.where(and(...conditions)) as any;
+  }
+  
+  return query
+    .orderBy(desc(codeSnippets.createdAt))
+    .limit(filters?.limit || 50);
+}
+
+export async function getCodeSnippetById(id: number) {
+  const result = await db
+    .select()
+    .from(codeSnippets)
+    .where(eq(codeSnippets.id, id))
+    .limit(1);
+  
+  return result[0] ?? null;
+}
+
+export async function getRandomCodeSnippet(filters?: {
+  topic?: string;
+  language?: string;
+  difficulty?: string;
+}) {
+  const snippets = await getCodeSnippets(filters);
+  
+  if (snippets.length === 0) return null;
+  
+  const randomIndex = Math.floor(Math.random() * snippets.length);
+  return snippets[randomIndex];
+}
+
+/* ------------------------------------------------------------------ */
+/* TYPING TEST RESULT FUNCTIONS */
+/* ------------------------------------------------------------------ */
+
+export async function insertTypingTestResult(data: {
+  userId: string;
+  snippetId: number;
+  wpm: number;
+  accuracy: number;
+  timeTaken: number;
+  totalCharacters: number;
+  correctCharacters: number;
+  incorrectCharacters: number;
+  topic: string;
+  language: string;
+  difficulty: string;
+}) {
+  const result = await db
+    .insert(typingTestResults)
+    .values(data)
+    .returning();
+  
+  return result[0];
+}
+
+export async function getTypingTestResults(userId: string, limit = 50) {
+  return db
+    .select()
+    .from(typingTestResults)
+    .where(eq(typingTestResults.userId, userId))
+    .orderBy(desc(typingTestResults.completedAt))
+    .limit(limit);
+}
+
+export async function getUserTypingStats(userId: string) {
+  const results = await db
+    .select()
+    .from(typingTestResults)
+    .where(eq(typingTestResults.userId, userId));
+  
+  if (results.length === 0) {
+    return {
+      totalTests: 0,
+      averageWpm: 0,
+      averageAccuracy: 0,
+      bestWpm: 0,
+      totalTime: 0,
+    };
+  }
+  
+  const totalTests = results.length;
+  const averageWpm = Math.round(
+    results.reduce((sum, r) => sum + r.wpm, 0) / totalTests
+  );
+  const averageAccuracy = Math.round(
+    results.reduce((sum, r) => sum + r.accuracy, 0) / totalTests
+  );
+  const bestWpm = Math.max(...results.map(r => r.wpm));
+  const totalTime = results.reduce((sum, r) => sum + r.timeTaken, 0);
+  
+  return {
+    totalTests,
+    averageWpm,
+    averageAccuracy,
+    bestWpm,
+    totalTime,
+  };
+}
