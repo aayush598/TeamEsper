@@ -99,10 +99,28 @@ Your task is to generate ONLY QUESTIONS (no answers, no hints, no explanations).
 - No topic names in output`;
 
 
+// Add to lib/db.ts - Replace the old news tables with these
+
 /* ------------------------------------------------------------------ */
-/* NEW: NEWS ARTICLES SCHEMA */
+/* NEWS CATEGORIES */
 /* ------------------------------------------------------------------ */
 
+export const newsCategories = pgTable(
+  "news_categories",
+  {
+    id: serial("id").primaryKey(),
+    userId: text("user_id").notNull(),
+    name: text("name").notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    userIdx: index("news_categories_user_idx").on(table.userId),
+  })
+);
+
+/* ------------------------------------------------------------------ */
+/* NEWS ARTICLES (Updated for Gemini Search) */
+/* ------------------------------------------------------------------ */
 
 export const newsArticles = pgTable(
   "news_articles",
@@ -111,26 +129,25 @@ export const newsArticles = pgTable(
     
     // Article Info
     title: text("title").notNull(),
-    description: text("description"),
-    content: text("content"),
-    url: text("url").notNull().unique(),
-    imageUrl: text("image_url"),
+    summary: text("summary").notNull(),
+    url: text("url").notNull(),
     
-    // Metadata
-    category: text("category").notNull(), // 'tech' or 'general'
-    source: text("source").notNull(), // 'techcrunch' or 'wired'
-    author: text("author"),
-    publishedAt: timestamp("published_at"),
+    // Metadata from search
+    category: text("category").notNull(),
+    publishedDate: text("published_date"), // Date string from article
+    sourceName: text("source_name"), // Website name
+    
+    // Grounding metadata
+    searchQuery: text("search_query").notNull(),
+    groundingChunkIndex: serial("grounding_chunk_index"),
     
     // Scraping metadata
-    scrapedAt: timestamp("scraped_at").defaultNow().notNull(),
-    lastUpdated: timestamp("last_updated").defaultNow().notNull(),
+    fetchedAt: timestamp("fetched_at").defaultNow().notNull(),
   },
   (t) => ({
-    categoryIdx: index("news_category_idx").on(t.category),
-    sourceIdx: index("news_source_idx").on(t.source),
-    scrapedAtIdx: index("news_scraped_at_idx").on(t.scrapedAt),
-    urlIdx: index("news_url_idx").on(t.url),
+    categoryIdx: index("news_articles_category_idx").on(t.category),
+    fetchedAtIdx: index("news_articles_fetched_at_idx").on(t.fetchedAt),
+    urlIdx: index("news_articles_url_idx").on(t.url),
   })
 );
 
@@ -145,10 +162,64 @@ export const userNewsReadStatus = pgTable(
     createdAt: timestamp("created_at").defaultNow().notNull(),
   },
   (t) => ({
-    userArticleIdx: index("user_article_idx").on(t.userId, t.articleId),
-    userIdx: index("user_news_idx").on(t.userId),
+    userArticleIdx: index("user_news_read_status_article_idx").on(t.userId, t.articleId),
+    userIdx: index("user_news_read_status_user_idx").on(t.userId),
   })
 );
+
+/* ------------------------------------------------------------------ */
+/* NEWS FETCH TRACKING */
+/* ------------------------------------------------------------------ */
+
+export const newsFetchLog = pgTable(
+  "news_fetch_log",
+  {
+    id: serial("id").primaryKey(),
+    userId: text("user_id").notNull(),
+    fetchedAt: timestamp("fetched_at").defaultNow().notNull(),
+    categoriesCount: serial("categories_count").notNull(),
+    articlesCount: serial("articles_count").notNull(),
+  },
+  (t) => ({
+    userIdx: index("news_fetch_log_user_idx").on(t.userId),
+    fetchedAtIdx: index("news_fetch_log_fetched_at_idx").on(t.fetchedAt),
+  })
+);
+
+/* ------------------------------------------------------------------ */
+/* NEWS CATEGORY FUNCTIONS */
+/* ------------------------------------------------------------------ */
+
+export async function insertNewsCategory(userId: string, name: string) {
+  const result = await db
+    .insert(newsCategories)
+    .values({ userId, name })
+    .onConflictDoNothing()
+    .returning();
+
+  return result[0] ?? null;
+}
+
+export async function getNewsCategories(userId: string) {
+  return db
+    .select()
+    .from(newsCategories)
+    .where(eq(newsCategories.userId, userId))
+    .orderBy(newsCategories.name);
+}
+
+export async function deleteNewsCategory(userId: string, id: number) {
+  await db
+    .delete(newsCategories)
+    .where(
+      and(
+        eq(newsCategories.id, id),
+        eq(newsCategories.userId, userId)
+      )
+    );
+
+  return { success: true };
+}
 
 /* ------------------------------------------------------------------ */
 /* NEWS ARTICLE FUNCTIONS */
@@ -157,33 +228,30 @@ export const userNewsReadStatus = pgTable(
 export interface NewsArticle {
   id: number;
   title: string;
-  description: string | null;
-  content: string | null;
+  summary: string;
   url: string;
-  imageUrl: string | null;
   category: string;
-  source: string;
-  author: string | null;
-  publishedAt: Date | null;
-  scrapedAt: Date;
-  lastUpdated: Date;
-  isRead?: boolean;
+  publishedDate: string | null;
+  sourceName: string | null;
+  searchQuery: string;
+  fetchedAt: Date;
+  isRead?: boolean | null;
 }
 
 export async function insertNewsArticles(articles: Array<{
   title: string;
-  description?: string;
-  content?: string;
+  summary: string;
   url: string;
-  imageUrl?: string;
   category: string;
-  source: string;
-  author?: string;
-  publishedAt?: Date;
+  publishedDate?: string;
+  sourceName?: string;
+  searchQuery: string;
+  groundingChunkIndex?: number;
 }>) {
   const results = [];
   
   for (const article of articles) {
+    // Check if article already exists by URL
     const existing = await db
       .select()
       .from(newsArticles)
@@ -205,41 +273,8 @@ export async function insertNewsArticles(articles: Array<{
   return results;
 }
 
-export async function getNewsArticles(filters?: {
-  category?: string;
-  source?: string;
-  startDate?: Date;
-  endDate?: Date;
-  limit?: number;
-}) {
-  let query = db.select().from(newsArticles);
-  
-  const conditions = [];
-  
-  if (filters?.category) {
-    conditions.push(eq(newsArticles.category, filters.category));
-  }
-  
-  if (filters?.source) {
-    conditions.push(eq(newsArticles.source, filters.source));
-  }
-  
-  if (filters?.startDate) {
-    conditions.push(gte(newsArticles.scrapedAt, filters.startDate));
-  }
-  
-  if (conditions.length > 0) {
-    query = query.where(and(...conditions)) as any;
-  }
-  
-  return query
-    .orderBy(desc(newsArticles.scrapedAt))
-    .limit(filters?.limit || 100);
-}
-
 export async function getNewsWithReadStatus(userId: string, filters?: {
   category?: string;
-  source?: string;
   startDate?: Date;
   isRead?: boolean;
   limit?: number;
@@ -250,29 +285,23 @@ export async function getNewsWithReadStatus(userId: string, filters?: {
     conditions.push(eq(newsArticles.category, filters.category));
   }
   
-  if (filters?.source) {
-    conditions.push(eq(newsArticles.source, filters.source));
-  }
-  
   if (filters?.startDate) {
-    conditions.push(gte(newsArticles.scrapedAt, filters.startDate));
+    conditions.push(gte(newsArticles.fetchedAt, filters.startDate));
   }
   
   const articles = await db
     .select({
       id: newsArticles.id,
       title: newsArticles.title,
-      description: newsArticles.description,
-      content: newsArticles.content,
+      summary: newsArticles.summary,
       url: newsArticles.url,
-      imageUrl: newsArticles.imageUrl,
       category: newsArticles.category,
-      source: newsArticles.source,
-      author: newsArticles.author,
-      publishedAt: newsArticles.publishedAt,
-      scrapedAt: newsArticles.scrapedAt,
-      lastUpdated: newsArticles.lastUpdated,
+      publishedDate: newsArticles.publishedDate,
+      sourceName: newsArticles.sourceName,
+      searchQuery: newsArticles.searchQuery,
+      fetchedAt: newsArticles.fetchedAt,
       isRead: userNewsReadStatus.isRead,
+      readAt: userNewsReadStatus.readAt,
     })
     .from(newsArticles)
     .leftJoin(
@@ -283,15 +312,23 @@ export async function getNewsWithReadStatus(userId: string, filters?: {
       )
     )
     .where(conditions.length > 0 ? and(...conditions) : undefined)
-    .orderBy(desc(newsArticles.scrapedAt))
+    .orderBy(desc(newsArticles.fetchedAt))
     .limit(filters?.limit || 100);
+  
+  // Sort: unread first, then by fetchedAt
+  const sorted = articles.sort((a, b) => {
+    if (a.isRead === b.isRead) {
+      return new Date(b.fetchedAt).getTime() - new Date(a.fetchedAt).getTime();
+    }
+    return (a.isRead ? 1 : 0) - (b.isRead ? 1 : 0);
+  });
   
   // Filter by read status if specified
   if (filters?.isRead !== undefined) {
-    return articles.filter(a => (a.isRead || false) === filters.isRead);
+    return sorted.filter(a => (a.isRead || false) === filters.isRead);
   }
   
-  return articles;
+  return sorted;
 }
 
 export async function markArticleAsRead(userId: string, articleId: number) {
@@ -325,13 +362,45 @@ export async function markArticleAsRead(userId: string, articleId: number) {
   }
 }
 
-export async function deleteOldNews(daysOld: number = 30) {
+/* ------------------------------------------------------------------ */
+/* NEWS FETCH LOG FUNCTIONS */
+/* ------------------------------------------------------------------ */
+
+export async function getLastNewsFetch(userId: string) {
+  const result = await db
+    .select()
+    .from(newsFetchLog)
+    .where(eq(newsFetchLog.userId, userId))
+    .orderBy(desc(newsFetchLog.fetchedAt))
+    .limit(1);
+  
+  return result[0] ?? null;
+}
+
+export async function insertNewsFetchLog(
+  userId: string,
+  categoriesCount: number,
+  articlesCount: number
+) {
+  const result = await db
+    .insert(newsFetchLog)
+    .values({
+      userId,
+      categoriesCount,
+      articlesCount,
+    })
+    .returning();
+  
+  return result[0];
+}
+
+export async function deleteOldNews(daysOld: number = 7) {
   const cutoffDate = new Date();
   cutoffDate.setDate(cutoffDate.getDate() - daysOld);
   
   await db
     .delete(newsArticles)
-    .where(gte(newsArticles.scrapedAt, cutoffDate));
+    .where(gte(newsArticles.fetchedAt, cutoffDate));
 }
 
 // Keep all your existing functions below
@@ -1009,3 +1078,4 @@ export async function getUserTypingStats(userId: string) {
     totalTime,
   };
 }
+

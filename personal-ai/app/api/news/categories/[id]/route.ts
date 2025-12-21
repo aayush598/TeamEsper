@@ -1,16 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
-import { markArticleAsRead } from "@/lib/db";
+import { deleteNewsCategory } from "@/lib/db";
 
 type Context = {
   params: Promise<{ id: string }>;
 };
 
 /**
- * POST /api/news/[id]/read
- * Mark a specific article as read for the authenticated user
+ * DELETE /api/news/categories/[id]
+ * Delete a specific news category
  */
-export async function POST(
+export async function DELETE(
   _req: NextRequest,
   context: Context
 ): Promise<NextResponse> {
@@ -23,25 +23,22 @@ export async function POST(
     
     const { id } = await context.params;
     
-    const articleId = Number(id);
+    const categoryId = Number(id);
     
-    if (isNaN(articleId)) {
+    if (isNaN(categoryId)) {
       return NextResponse.json(
-        { error: "Invalid article ID" },
+        { error: "Invalid category ID" },
         { status: 400 }
       );
     }
     
-    await markArticleAsRead(userId, articleId);
+    await deleteNewsCategory(userId, categoryId);
     
-    return NextResponse.json({ 
-      success: true,
-      message: "Article marked as read" 
-    });
+    return NextResponse.json({ success: true });
   } catch (error) {
-    console.error("Mark as read error:", error);
+    console.error("Delete category error:", error);
     return NextResponse.json(
-      { error: "Failed to mark article as read" },
+      { error: "Failed to delete category" },
       { status: 500 }
     );
   }
