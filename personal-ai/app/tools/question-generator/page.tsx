@@ -635,30 +635,43 @@ export default function QuestionGenerator() {
                       history.map((item) => (
                         <Card
                           key={item.id}
-                          className="cursor-pointer hover:bg-gray-50 relative"
+                          className="relative cursor-pointer hover:bg-gray-50"
                           onClick={async () => {
                             const res = await fetch(`/api/question-history/${item.id}`);
                             if (!res.ok) return;
-
                             const data = await res.json();
                             setGeneratedQuestions(data.record.output);
                           }}
                         >
-                          <CardContent className="p-3 text-sm space-y-1">
-                            <div className="flex items-start justify-between gap-2">
-                              <p className="font-medium truncate">
+                          <CardContent className="p-3 space-y-2">
+                            {/* Header Row */}
+                            <div className="flex items-start justify-between gap-3">
+                              {/* Topics */}
+                              <p
+                                className="
+                                  text-sm font-medium
+                                  truncate
+                                  max-w-[220px]
+                                  sm:max-w-[260px]
+                                  md:max-w-[300px]
+                                "
+                                title={item.topics.join(", ")}
+                              >
                                 {item.topics.join(", ")}
                               </p>
 
+
+                              {/* Delete */}
                               <button
                                 onClick={(e) => handleDeleteHistory(item.id, e)}
-                                className="text-xs text-red-500 hover:text-red-700"
+                                className="shrink-0 text-xs text-red-500 hover:text-red-700"
                               >
                                 Delete
                               </button>
                             </div>
 
-                            <p className="text-xs text-gray-500">
+                            {/* Meta */}
+                            <p className="text-xs text-gray-500 break-words">
                               {item.quizMode} · {item.questionType} · {item.numQuestions} Q
                             </p>
 
@@ -667,6 +680,7 @@ export default function QuestionGenerator() {
                             </p>
                           </CardContent>
                         </Card>
+
                       ))
                     )}
                   </ScrollArea>

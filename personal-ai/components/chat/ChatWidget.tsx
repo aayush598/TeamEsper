@@ -120,7 +120,7 @@ export default function ChatWidget() {
       {/* Toggle Button */}
       <button
         onClick={() => setOpen(o => !o)}
-        className="fixed bottom-6 right-6 z-50 rounded-full bg-orange-600 p-4 text-white shadow-lg hover:bg-orange-700"
+        className="fixed bottom-6 right-6 z-50 rounded-full bg-blue-600 p-4 text-white shadow-lg hover:bg-blue-700"
       >
         {open ? <X /> : <MessageCircle />}
       </button>
