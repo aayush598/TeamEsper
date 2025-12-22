@@ -1009,3 +1009,363 @@ export async function getUserTypingStats(userId: string) {
     totalTime,
   };
 }
+
+// Add to lib/db.ts - High-performance Notes System
+
+/* ------------------------------------------------------------------ */
+/* NOTES SYSTEM - OPTIMIZED FOR SPEED */
+/* ------------------------------------------------------------------ */
+
+export const noteFolders = pgTable(
+  "note_folders",
+  {
+    id: serial("id").primaryKey(),
+    userId: text("user_id").notNull(),
+    name: text("name").notNull(),
+    color: text("color").default("#6366f1"),
+    icon: text("icon").default("📁"),
+    position: integer("position").default(0).notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (t) => ({
+    userIdx: index("note_folders_user_idx").on(t.userId),
+    userPositionIdx: index("note_folders_user_position_idx").on(t.userId, t.position),
+  })
+);
+
+export const notes = pgTable(
+  "notes",
+  {
+    id: serial("id").primaryKey(),
+    userId: text("user_id").notNull(),
+    folderId: serial("folder_id").references(() => noteFolders.id, { onDelete: "cascade" }),
+    
+    title: text("title").notNull(),
+    content: text("content").notNull().default(""),
+    
+    // For quick preview without loading full content
+    preview: text("preview").notNull().default(""),
+    
+    // Tags for filtering
+    tags: json("tags").$type<string[]>().default([]),
+    
+    // Metadata
+    isPinned: boolean("is_pinned").default(false),
+    isFavorite: boolean("is_favorite").default(false),
+    color: text("color"),
+    
+    // Timestamps
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+    lastViewedAt: timestamp("last_viewed_at"),
+  },
+  (t) => ({
+    userIdx: index("notes_user_idx").on(t.userId),
+    folderIdx: index("notes_folder_idx").on(t.folderId),
+    pinnedIdx: index("notes_pinned_idx").on(t.isPinned),
+    favoriteIdx: index("notes_favorite_idx").on(t.isFavorite),
+    updatedAtIdx: index("notes_updated_at_idx").on(t.updatedAt),
+    // Composite index for common queries
+    userFolderIdx: index("notes_user_folder_idx").on(t.userId, t.folderId),
+  })
+);
+
+/* ------------------------------------------------------------------ */
+/* FOLDER FUNCTIONS - OPTIMIZED */
+/* ------------------------------------------------------------------ */
+
+export async function getFolders(userId: string) {
+  return db
+    .select()
+    .from(noteFolders)
+    .where(eq(noteFolders.userId, userId))
+    .orderBy(noteFolders.position, noteFolders.name);
+}
+
+export async function insertFolder(data: {
+  userId: string;
+  name: string;
+  color?: string;
+  icon?: string;
+}) {
+  // Get max position for ordering
+  const maxPos = await db
+    .select({ max: noteFolders.position })
+    .from(noteFolders)
+    .where(eq(noteFolders.userId, data.userId));
+  
+  const position = (maxPos[0]?.max || 0) + 1;
+  
+  const result = await db
+    .insert(noteFolders)
+    .values({ ...data, position })
+    .returning();
+  
+  return result[0];
+}
+
+export async function updateFolder(
+  userId: string,
+  folderId: number,
+  data: { name?: string; color?: string; icon?: string }
+) {
+  const result = await db
+    .update(noteFolders)
+    .set({ ...data, updatedAt: new Date() })
+    .where(
+      and(
+        eq(noteFolders.id, folderId),
+        eq(noteFolders.userId, userId)
+      )
+    )
+    .returning();
+  
+  return result[0];
+}
+
+export async function deleteFolder(userId: string, folderId: number) {
+  await db
+    .delete(noteFolders)
+    .where(
+      and(
+        eq(noteFolders.id, folderId),
+        eq(noteFolders.userId, userId)
+      )
+    );
+  
+  return { success: true };
+}
+
+/* ------------------------------------------------------------------ */
+/* NOTES FUNCTIONS - ULTRA FAST */
+/* ------------------------------------------------------------------ */
+
+// Get notes with minimal data for list view (fastest)
+export async function getNotesPreview(
+  userId: string,
+  filters?: {
+    folderId?: number;
+    isPinned?: boolean;
+    isFavorite?: boolean;
+    search?: string;
+  }
+) {
+  const conditions = [eq(notes.userId, userId)];
+  
+  if (filters?.folderId) {
+    conditions.push(eq(notes.folderId, filters.folderId));
+  }
+  
+  if (filters?.isPinned !== undefined) {
+    conditions.push(eq(notes.isPinned, filters.isPinned));
+  }
+  
+  if (filters?.isFavorite !== undefined) {
+    conditions.push(eq(notes.isFavorite, filters.isFavorite));
+  }
+  
+  let query = db
+    .select({
+      id: notes.id,
+      title: notes.title,
+      preview: notes.preview,
+      folderId: notes.folderId,
+      isPinned: notes.isPinned,
+      isFavorite: notes.isFavorite,
+      color: notes.color,
+      tags: notes.tags,
+      updatedAt: notes.updatedAt,
+      createdAt: notes.createdAt,
+    })
+    .from(notes)
+    .where(and(...conditions))
+    .orderBy(
+      desc(notes.isPinned),
+      desc(notes.updatedAt)
+    )
+    .limit(100);
+  
+  const results = await query;
+  
+  // Client-side search for speed (if needed)
+  if (filters?.search) {
+    const searchLower = filters.search.toLowerCase();
+    return results.filter(
+      note =>
+        note.title.toLowerCase().includes(searchLower) ||
+        note.preview.toLowerCase().includes(searchLower)
+    );
+  }
+  
+  return results;
+}
+
+// Get single note with full content
+export async function getNote(userId: string, noteId: number) {
+  const result = await db
+    .select()
+    .from(notes)
+    .where(
+      and(
+        eq(notes.id, noteId),
+        eq(notes.userId, userId)
+      )
+    )
+    .limit(1);
+  
+  if (result[0]) {
+    // Update last viewed (async, don't wait)
+    db.update(notes)
+      .set({ lastViewedAt: new Date() })
+      .where(eq(notes.id, noteId))
+      .execute();
+  }
+  
+  return result[0] || null;
+}
+
+// Create note (optimized)
+export async function insertNote(data: {
+  userId: string;
+  folderId?: number;
+  title: string;
+  content?: string;
+  tags?: string[];
+  color?: string;
+}) {
+  const content = data.content || "";
+  const preview = content.substring(0, 200); // First 200 chars for preview
+  
+  const result = await db
+    .insert(notes)
+    .values({
+      userId: data.userId,
+      folderId: data.folderId,
+      title: data.title,
+      content,
+      preview,
+      tags: data.tags || [],
+      color: data.color,
+    })
+    .returning();
+  
+  return result[0];
+}
+
+// Update note (optimized - only update changed fields)
+export async function updateNote(
+  userId: string,
+  noteId: number,
+  data: {
+    title?: string;
+    content?: string;
+    folderId?: number;
+    tags?: string[];
+    isPinned?: boolean;
+    isFavorite?: boolean;
+    color?: string;
+  }
+) {
+  const updateData: any = {
+    ...data,
+    updatedAt: new Date(),
+  };
+  
+  // Update preview if content changed
+  if (data.content !== undefined) {
+    updateData.preview = data.content.substring(0, 200);
+  }
+  
+  const result = await db
+    .update(notes)
+    .set(updateData)
+    .where(
+      and(
+        eq(notes.id, noteId),
+        eq(notes.userId, userId)
+      )
+    )
+    .returning();
+  
+  return result[0];
+}
+
+// Delete note
+export async function deleteNote(userId: string, noteId: number) {
+  await db
+    .delete(notes)
+    .where(
+      and(
+        eq(notes.id, noteId),
+        eq(notes.userId, userId)
+      )
+    );
+  
+  return { success: true };
+}
+
+// Bulk delete notes
+export async function bulkDeleteNotes(userId: string, noteIds: number[]) {
+  await db
+    .delete(notes)
+    .where(
+      and(
+        eq(notes.userId, userId),
+        inArray(notes.id, noteIds)
+      )
+    );
+  
+  return { success: true };
+}
+
+// Get note stats (cached on client)
+export async function getNoteStats(userId: string) {
+  const allNotes = await db
+    .select({
+      id: notes.id,
+      folderId: notes.folderId,
+      isPinned: notes.isPinned,
+      isFavorite: notes.isFavorite,
+    })
+    .from(notes)
+    .where(eq(notes.userId, userId));
+  
+  return {
+    total: allNotes.length,
+    pinned: allNotes.filter(n => n.isPinned).length,
+    favorites: allNotes.filter(n => n.isFavorite).length,
+    byFolder: allNotes.reduce((acc, note) => {
+      const folderId = note.folderId || 0;
+      acc[folderId] = (acc[folderId] || 0) + 1;
+      return acc;
+    }, {} as Record<number, number>),
+  };
+}
+
+// Search notes (fast preview search)
+export async function searchNotes(userId: string, query: string) {
+  const searchLower = query.toLowerCase();
+  
+  const results = await db
+    .select({
+      id: notes.id,
+      title: notes.title,
+      preview: notes.preview,
+      folderId: notes.folderId,
+      tags: notes.tags,
+      updatedAt: notes.updatedAt,
+    })
+    .from(notes)
+    .where(eq(notes.userId, userId))
+    .orderBy(desc(notes.updatedAt))
+    .limit(50);
+  
+  // Fast client-side filtering
+  return results.filter(
+    note =>
+      note.title.toLowerCase().includes(searchLower) ||
+      note.preview.toLowerCase().includes(searchLower) ||
+      note.tags?.some(tag => tag.toLowerCase().includes(searchLower))
+  );
+}

@@ -5,43 +5,8 @@
     {
       "idx": 0,
       "version": "7",
-      "when": 1765815812635,
-      "tag": "0000_perfect_wildside",
-      "breakpoints": true
-    },
-    {
-      "idx": 1,
-      "version": "7",
-      "when": 1765822304206,
-      "tag": "0001_loose_screwball",
-      "breakpoints": true
-    },
-    {
-      "idx": 2,
-      "version": "7",
-      "when": 1766156799081,
-      "tag": "0002_handy_thor",
-      "breakpoints": true
-    },
-    {
-      "idx": 3,
-      "version": "7",
-      "when": 1766162123317,
-      "tag": "0003_fast_la_nuit",
-      "breakpoints": true
-    },
-    {
-      "idx": 4,
-      "version": "7",
-      "when": 1766224053829,
-      "tag": "0004_broad_supreme_intelligence",
-      "breakpoints": true
-    },
-    {
-      "idx": 5,
-      "version": "7",
-      "when": 1766226718215,
-      "tag": "0005_true_ares",
+      "when": 1766390239727,
+      "tag": "0000_dusty_wolfpack",
       "breakpoints": true
     }
   ]
