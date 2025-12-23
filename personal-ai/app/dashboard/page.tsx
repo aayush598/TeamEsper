@@ -10,7 +10,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Brain, Sparkles, Timer, Newspaper, Type} from "lucide-react";
+import { Brain, Sparkles, Timer, Newspaper, Type, Notebook} from "lucide-react";
 
 export default function Dashboard() {
   const router = useRouter();
@@ -65,6 +65,14 @@ export default function Dashboard() {
       icon: Type,
       available: true,
       route: "/tools/typing-test",
+    },
+    {
+      id: "notes",
+      title: "Notes",
+      description: "Personal notes tool to store info",
+      icon: Notebook,
+      available: true,
+      route: "/tools/notes",
     },
   ];
 
