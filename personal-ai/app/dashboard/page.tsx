@@ -74,7 +74,7 @@ export default function Dashboard() {
       <header className="border-b bg-white/80 backdrop-blur-sm">
         <div className="container mx-auto px-4 py-4 flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">Interview Hub</h1>
+            <h1 className="text-2xl font-bold text-gray-900">Team Esper</h1>
             <p className="text-sm text-gray-600">
               AI-Powered Interview Preparation
             </p>

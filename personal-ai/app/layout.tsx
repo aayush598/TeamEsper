@@ -9,7 +9,7 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "Interview Hub - AI Quiz Generator",
+  title: "Team Esper - AI Quiz Generator",
   description: "Generate interview-grade questions with AI",
 };
 
