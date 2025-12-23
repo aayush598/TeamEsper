@@ -10,7 +10,7 @@ import {
   boolean,
   integer,
 } from "drizzle-orm/pg-core";
-import { eq, desc, and, gte, sql } from "drizzle-orm";
+import { eq, desc, and, gte, sql, inArray } from "drizzle-orm";
 
 /* ------------------------------------------------------------------ */
 /* DB CONNECTION */
