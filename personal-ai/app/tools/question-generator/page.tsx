@@ -11,7 +11,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { ArrowLeft, Plus, Trash2, Sparkles, Brain, Settings, FileText } from 'lucide-react'
+import { ArrowLeft, Plus, Trash2, Sparkles, Brain, Settings, FileText, Copy } from 'lucide-react'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Badge } from '@/components/ui/badge'
 import { useToast } from '@/hooks/use-toast'
@@ -153,11 +153,24 @@ export default function QuestionGenerator() {
     setHistory(data.history || []);
   };
 
+  const handleCopy = async (text: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      sonnerToast.success("Copied to clipboard");
+    } catch {
+      sonnerToast.error("Failed to copy");
+    }
+  };
+
+
   const handleDeleteHistory = async (
     id: number,
     e: React.MouseEvent
   ) => {
-    e.stopPropagation(); // 🔥 prevents loading the card
+    e.stopPropagation(); // prevents loading the card
+
+    const confirmed = confirm('Are you sure you want to delete this history?');
+    if (!confirmed) return;
 
     const res = await fetch(`/api/question-history/${id}`, {
       method: "DELETE",
@@ -301,6 +314,7 @@ export default function QuestionGenerator() {
       if (response.ok) {
         const data = await response.json()
         setGeneratedQuestions(data.questions)
+        loadHistory()
         sonnerToast.success('Questions generated successfully!')
       } else {
         const errorData = await response.json()
@@ -607,11 +621,23 @@ export default function QuestionGenerator() {
               <CardContent className="space-y-6">
                 {/* Current Output */}
                 {generatedQuestions ? (
+                  <>
+                    <div className="flex justify-end">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleCopy(generatedQuestions)}
+                      >
+                        <Copy className="h-4 w-4 mr-2" />
+                        Copy
+                      </Button>
+                    </div>
                   <ScrollArea className="h-[300px]">
                     <div className="whitespace-pre-wrap text-sm font-mono bg-gray-50 p-4 rounded-lg">
                       {generatedQuestions}
                     </div>
                   </ScrollArea>
+                  </>
                 ) : (
                   <div className="flex flex-col items-center justify-center h-[200px] text-center">
                     <Brain className="h-12 w-12 text-gray-300 mb-4" />
@@ -659,6 +685,19 @@ export default function QuestionGenerator() {
                               >
                                 {item.topics.join(", ")}
                               </p>
+
+                              <button
+                                onClick={async (e) => {
+                                  e.stopPropagation();
+                                  const res = await fetch(`/api/question-history/${item.id}`);
+                                  if (!res.ok) return;
+                                  const data = await res.json();
+                                  handleCopy(data.record.output);
+                                }}
+                                className="text-xs text-gray-500 hover:text-gray-700"
+                              >
+                                Copy
+                              </button>
 
 
                               {/* Delete */}
